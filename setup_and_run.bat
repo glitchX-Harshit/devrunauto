@@ -2,7 +2,7 @@
 REM Setup and Run Script for DroidRun Commerce Agent
 REM Enforces Python 3.10, checks ADB, and installs dependencies.
 
-set VENV_DIR=venv
+set VENV_DIR=.venv
 
 echo ===================================================
 echo      DroidRun Commerce Agent - Setup & Run
@@ -17,7 +17,7 @@ if %errorlevel% neq 0 (
     echo [ERROR] No ADB device connected! 
     echo Please connect your Android device/emulator and enable USB Debugging.
     echo If using an emulator, ensure it is running.
-    pause
+    
     exit /b
 )
 echo [OK] Device connected.
@@ -35,7 +35,7 @@ py -3.10 --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Python 3.10 is required but not found via 'py -3.10'.
     echo Please install Python 3.10 from python.org.
-    pause
+    
     exit /b
 )
 
@@ -43,7 +43,7 @@ echo [INFO] Creating venv...
 py -3.10 -m venv %VENV_DIR%
 if %errorlevel% neq 0 (
     echo [ERROR] Failed to create venv.
-    pause
+    
     exit /b
 )
 set PYTHON_CMD="%VENV_DIR%\Scripts\python.exe"
@@ -63,7 +63,7 @@ if not exist ".env" (
         echo [INFO] Created .env from .env.example. Please add your API Keys now.
         notepad .env
     )
-    pause
+    
 )
 
 echo.
@@ -81,4 +81,4 @@ echo Example: Running Shopping Search for "iPhone 15"...
 echo.
 %PYTHON_CMD% commerce_agent.py --task shopping --query "iPhone 15"
 
-pause
+
