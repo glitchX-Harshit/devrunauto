@@ -234,11 +234,16 @@ async def main():
     parser.add_argument("--pickup", required=True, help="Pickup location")
     parser.add_argument("--drop", required=True, help="Drop location")
     parser.add_argument("--preference", default="cab", choices=["cab", "auto", "sedan"], help="Preferred ride type")
+    parser.add_argument("--action", default="compare", choices=["compare", "book"], help="Action to perform")
     args = parser.parse_args()
 
     # Use models/gemini-2.5-flash as per new standard
     agent = RideComparisonAgent(model="models/gemini-2.5-flash")
-    await agent.compare_rides(args.pickup, args.drop, args.preference)
+    
+    if args.action == "book":
+        await agent.book_cheapest_ride(args.pickup, args.drop)
+    else:
+        await agent.compare_rides(args.pickup, args.drop, args.preference)
 
 if __name__ == "__main__":
     if sys.platform == 'win32':

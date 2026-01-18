@@ -44,7 +44,7 @@ class CommerceAgent:
         except:
             return float('inf')
 
-    async def execute_task(self, app_name: str, query: str, item_type: str, action: str = "search") -> dict:
+    async def execute_task(self, app_name: str, query: str, item_type: str, action: str = "search", target_item: str = None) -> dict:
         """
         Spawns a DroidAgent to execute a specific commerce task.
         Uses Vision capabilities for better UI understanding.
@@ -54,16 +54,18 @@ class CommerceAgent:
         
         # 1. Define Goal (Natural Language with Structural Constraints)
         if action == "order":
+            item_instruction = f"find the item '{target_item}'" if target_item else "Select the first relevant item"
             goal = (
                 f"Open the app '{app_name}'. "
                 f"Search for '{query}'. "
-                f"Select the first relevant item. "
+                f"Wait for results. "
+                f"Visually SCAN and {item_instruction}. "
                 f"Click 'Add' or 'Add to Cart'. "
-                f"Go to View Cart / Checkout. "
-                f"Proceed to Pay. "
-                f"Select 'Cash on Delivery' (COD) or 'Pay on Delivery' as payment method. "
-                f"Click 'Place Order' or 'Confirm Order'. "
-                f"Return a strict JSON object with keys: 'status' (success/failed), 'order_id' (if visible), 'final_price'. "
+                f"Go to View Cart. "
+                f"Click 'Proceed to Pay' or 'Checkout'. "
+                f"Select 'Cash on Delivery' (COD) or 'Pay on Delivery'. "
+                f"CRITICAL: Click 'Place Order', 'Confirm Order', or 'Swipe to Pay' to finalize the booking. "
+                f"Return a strict JSON object with keys: 'status' (success/failed), 'order_id', 'final_price'. "
             )
         else:
             goal = (
@@ -82,8 +84,6 @@ class CommerceAgent:
                 f"If no exact match is found, find the closest match. "
             )
 
-        # 2. Configure Agent (Professional Pattern)
-        # Using Vision for robustness against custom UI (Flutter/React Native)
         # 2. Configure Agent (Professional Pattern)
         # Using load_llm to avoid DroidrunConfig error
         from droidrun.agent.utils.llm_picker import load_llm
@@ -175,71 +175,98 @@ class CommerceAgent:
             print(f"[Error] Task Execution Failed: {e}")
             return start_data
 
+    async def auto_order_cheapest(self, query):
+        """
+        High-level method to Find Cheapest Food -> Order It.
+        """
+        print(f"\n[CommerceAgent] 🤖 Autonomous Ordering Sequence Initiated for: '{query}'")
+        
+        # 1. Compare Prices
+        platforms = ["Zomato", "Swiggy"]
+        results = {}
+        
+        for platform in platforms:
+            res = await self.execute_task(platform, query, "food item", action="search")
+            results[platform.lower()] = res
+            await asyncio.sleep(2)
+
+        # 2. Determine Victor
+        z_price = float('inf')
+        s_price = float('inf')
+        
+        if results.get('zomato', {}).get('status') == 'success':
+            z_price = results['zomato']['data'].get('numeric_price', float('inf'))
+            
+        if results.get('swiggy', {}).get('status') == 'success':
+             s_price = results['swiggy']['data'].get('numeric_price', float('inf'))
+             
+        victor = None
+        target_app = None
+        target_title = None
+        
+        if z_price < s_price:
+            victor = results['zomato']
+            target_app = "Zomato"
+            target_title = victor['data'].get('title')
+        elif s_price < z_price:
+             victor = results['swiggy']
+             target_app = "Swiggy"
+             target_title = victor['data'].get('title')
+        elif s_price == z_price and s_price != float('inf'):
+             target_app = "Swiggy" # Default to Swiggy on tie
+             victor = results['swiggy']
+             target_title = victor['data'].get('title')
+        
+        if not target_app:
+             print("\n❌ Could not determine valid pricing on either app. Aborting order.")
+             return results
+
+        print(f"\n[CommerceAgent] 🏆 Best Deal identify: {target_app} @ {victor['data'].get('price')}")
+        print(f"Details: {target_title}")
+        print(f"Proceeding to ORDER on {target_app}...")
+        
+        # 3. Order
+        # We perform the order action on the winning app with specific target
+        booking_result = await self.execute_task(target_app, query, "food item", action="order", target_item=target_title)
+        
+        results["order_status"] = booking_result
+        return results
+
 async def main():
     parser = argparse.ArgumentParser(description="BestBuy-Agent: Commerce Automation (DroidRun)")
     parser.add_argument("--task", choices=['shopping', 'food'], default='shopping')
     parser.add_argument("--query", required=True)
+    parser.add_argument("--action", choices=['search', 'order'], default='search', help="Action to perform")
+    parser.add_argument("--app", help="Specific app to use (e.g., Swiggy, Zomato)")
     args = parser.parse_args()
 
-    # Domain Configuration
-    if args.task == "shopping":
-        platforms = ["Amazon", "Flipkart"]
-        item_type = "product"
-    else:
-        platforms = ["Zomato", "Swiggy"]
-        item_type = "food item"
-
     # Initialize Controller
-    # Using 2.5 Flash as recommended by quotas
     commerce_bot = CommerceAgent(provider="gemini", model="models/gemini-2.5-flash")
     
-    results = {}
-
-    # Sequential Execution (Single Device limitation)
-    for platform in platforms:
-        res = await commerce_bot.execute_task(platform, args.query, item_type)
-        results[platform.lower()] = res
-        # Brief cooldown for app switching stability
-        await asyncio.sleep(2)
-
-    # Output (Stdout for Backend Integration)
-    
-    # Calculate Victor
-    zomato_res = results.get('zomato', {})
-    swiggy_res = results.get('swiggy', {})
-    
-    z_price = float('inf')
-    s_price = float('inf')
-    
-    if zomato_res.get('status') == 'success':
-        z_price = zomato_res['data'].get('numeric_price', float('inf'))
-        
-    if swiggy_res.get('status') == 'success':
-         s_price = swiggy_res['data'].get('numeric_price', float('inf'))
-         
-    victor = None
-    if z_price < s_price:
-        victor = {
-            "platform": "Zomato",
-            "details": zomato_res['data']
-        }
-    elif s_price < z_price:
-         victor = {
-            "platform": "Swiggy",
-            "details": swiggy_res['data']
-        }
-    elif s_price == z_price and s_price != float('inf'):
-         victor = {
-            "platform": "Tie",
-            "details": swiggy_res['data']
-        }
+    # Workflow Logic
+    if args.action == "order" and not args.app:
+        # Autonomous Comparative Ordering
+        await commerce_bot.auto_order_cheapest(args.query)
     else:
-        victor = "No valid data found"
+        # Standard Execution (Search or Specific App Order)
+        if args.task == "shopping":
+            platforms = ["Amazon", "Flipkart"]
+            item_type = "product"
+        else:
+            platforms = ["Zomato", "Swiggy"]
+            item_type = "food item"
         
-    results["victor"] = victor
+        if args.app:
+            platforms = [p for p in platforms if p.lower() == args.app.lower()]
 
-    print("\n--- Final Aggregated Results ---")
-    print(json.dumps(results, indent=2))
+        results = {}
+        for platform in platforms:
+            res = await commerce_bot.execute_task(platform, args.query, item_type, action=args.action)
+            results[platform.lower()] = res
+            await asyncio.sleep(2)
+            
+        print("\n--- Final Results ---")
+        print(json.dumps(results, indent=2))
 
 if __name__ == "__main__":
     if sys.platform == 'win32':

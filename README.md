@@ -97,3 +97,22 @@ This project uses the **DroidRun Professional Architecture**:
 - **LLM Picker**: Dynamic model loading (`load_llm`).
 - **Vision & Reasoning**: Enabled via `AgentConfig` for robust UI interaction.
 - **Telemetry**: Disabled for local privacy/stability.
+
+---
+
+## 4. Event Coordinator Agent (`event_coordinator_agent.py`)
+
+Automates sending event invitations via WhatsApp to a list of contacts.
+
+### Usage
+```bash
+python event_coordinator_agent.py --contacts "Pravin, Pravin 2" --event "Birthday Bash" --date "20 Jan" --time "8 PM" --location "Mumbai"
+```
+
+### Flags
+- `--contacts`: Comma-separated list of contact names (must match how they are saved in your phone).
+- `--event`: Name of the event.
+- `--date`: Date of the event.
+- `--time`: Time of the event.
+- `--location`: Venue of the event.
+- `--app`: App to use (default: "WhatsApp").
