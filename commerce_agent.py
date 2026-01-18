@@ -158,10 +158,6 @@ class CommerceAgent:
                          print(f"[Warn] JSON Decode Error: {clean_json}")
                 else:
                      print(f"[Warn] Agent output was not JSON: {clean_json[:50]}...")
-                    # Add numeric price for comparison logic
-                    start_data["data"]["numeric_price"] = self._parse_price(start_data["data"].get("price"))
-                else:
-                     print(f"[Warn] Agent output was not JSON: {clean_json[:50]}...")
             else:
                  print("[Warn] Agent returned None result.")
             
@@ -199,6 +195,41 @@ async def main():
         await asyncio.sleep(2)
 
     # Output (Stdout for Backend Integration)
+    
+    # Calculate Victor
+    zomato_res = results.get('zomato', {})
+    swiggy_res = results.get('swiggy', {})
+    
+    z_price = float('inf')
+    s_price = float('inf')
+    
+    if zomato_res.get('status') == 'success':
+        z_price = zomato_res['data'].get('numeric_price', float('inf'))
+        
+    if swiggy_res.get('status') == 'success':
+         s_price = swiggy_res['data'].get('numeric_price', float('inf'))
+         
+    victor = None
+    if z_price < s_price:
+        victor = {
+            "platform": "Zomato",
+            "details": zomato_res['data']
+        }
+    elif s_price < z_price:
+         victor = {
+            "platform": "Swiggy",
+            "details": swiggy_res['data']
+        }
+    elif s_price == z_price and s_price != float('inf'):
+         victor = {
+            "platform": "Tie",
+            "details": swiggy_res['data']
+        }
+    else:
+        victor = "No valid data found"
+        
+    results["victor"] = victor
+
     print("\n--- Final Aggregated Results ---")
     print(json.dumps(results, indent=2))
 
